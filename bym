@@ -317,25 +317,27 @@ do_search() {
 
 	local raw_results
 	if [[ "$SEARCH_SOURCE" == "youtube" ]]; then
-		# 需要代理
-		proxy_opt="--proxy $PROXY_URL" # 替换为你的代理地址
 		search_prefix="ytsearch15:$QUERY"
+		raw_results=$(yt-dlp --proxy "$PROXY_URL" "$search_prefix" \
+			--print "%(id)s|~|%(title)s [%(duration_string)s] (%(uploader)s)" \
+			--no-warnings 2>/dev/null)
 	else
-		# Bilibili 不走代理，可以不设置 proxy_opt
-		proxy_opt=""
+		# if [[ ! -f "$BILI_COOKIE" ]]; then
+		# 	STATUS="Bilibili cookie file missing: $BILI_COOKIE"
+		# 	draw_ui
+		# 	return
+		# fi
 		search_prefix="bilisearch15:$QUERY"
-		cookies_opt="--cookies $BILI_COOKIE"
+		raw_results=$(yt-dlp --cookies "$BILI_COOKIE" "$search_prefix" \
+			--print "%(id)s|~|%(title)s [%(duration_string)s] (%(uploader)s)" \
+			--no-warnings 2>/dev/null)
 	fi
-
-	raw_results=$(yt-dlp "$cookies_opt" "$proxy_opt" "$search_prefix" \
-		--print "%(id)s|~|%(title)s [%(duration_string)s] (%(uploader)s)" \
-		--no-warnings 2>/dev/null)
 
 	RESULTS_ID=()
 	RESULTS_TITLE=()
 
 	while IFS= read -r line; do
-		if [[ -z "$line" ]]; then continue; fi
+		[[ -z "$line" || "$line" == ERROR:* ]] && continue
 		local vid="${line%%|~|*}"
 		local title="${line#*|~|}"
 
