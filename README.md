@@ -7,13 +7,38 @@
 - YouTube/Bilibili 搜索并播放音乐
 - 本地音乐播放（`~/Music` 目录）
 - TUI 界面，支持键盘操作
-- 进度条显示与控制
+- 进度条显示(控制未实现)
+- [ ] 歌曲更多信息
+- [ ] 单曲循环/顺序/随机
+- [ ] 音乐下载
+- [ ] 哔哩哔哩登录
+- [ ] 配置化
+
+## 已知问题
+
+- `""`能捕获到回车/空格
+- 已设置/dev/null,mpv播放成功后仍输出
 
 ## 依赖
 
 - `yt-dlp`
 - `mpv`
 - `socat`
+
+```sh
+# Arch Linux
+paru -S yt-dlp mpv socat
+
+# macOS
+brew install yt-dlp mpv socat
+```
+
+## 安装
+
+```sh
+curl -o ~/.local/bin/bym -fsSL https://raw.githubusercontent.com/akirco/bym/refs/heads/main/bym
+chmod +x ~/.local/bin/bym
+```
 
 ## 操作
 
