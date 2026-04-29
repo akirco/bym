@@ -69,7 +69,6 @@ LOCAL_IDS=()              # 存储本地文件路径
 LOCAL_TITLES=()           # 存储本地文件名
 SCROLL_OFFSET=0           # 当前列表显示的起始索引
 SEARCH_SOURCE="youtube"   # 可选 "youtube" 或 "bilibili"
-PROXY_URL="http://127.0.0.1:7890"
 BILI_COOKIE="${XDG_CONFIG_HOME}/${PROGRAM_NAME}/cookies.txt"
 # --------------------------
 # UI 绘制函数
@@ -309,24 +308,50 @@ toggle_source() {
 	draw_ui
 }
 
+do_yts_search() {
+	local search_query="$1"
+	local limit="${2:-35}"
+
+	local encoded_query
+	encoded_query=$(printf '%s' "$search_query" | jq -sRr @uri)
+
+	local url="https://www.youtube.com/results?search_query=${encoded_query}&sp=EgIQAQ%253D%253D&hl=en&gl=US"
+
+	local html_content
+	if ! html_content=$(curl -s "$url" 2>/dev/null); then
+		return 1
+	fi
+
+	local json_data
+	json_data=$(echo "$html_content" | grep -oP 'var ytInitialData = \K.*?(?=;</script>)')
+
+	if [[ -z "$json_data" ]]; then
+		return 1
+	fi
+
+	echo "$json_data" | jq -r "
+      [
+        .. | objects |
+        select(has(\"videoRenderer\")) |
+        .videoRenderer | {
+          title: .title.runs[0].text,
+          videoId: .videoId
+        }
+      ] | .[:${limit}]
+      "
+}
+
 do_search() {
 	if [[ -z "$QUERY" ]]; then return; fi
 
 	STATUS=" Searching $SEARCH_SOURCE for: $QUERY ..."
 	draw_ui
 
-	local raw_results
+	local json_results
 	if [[ "$SEARCH_SOURCE" == "youtube" ]]; then
-		search_prefix="ytsearch15:$QUERY"
-		raw_results=$(yt-dlp --proxy "$PROXY_URL" "$search_prefix" \
-			--print "%(id)s|~|%(title)s [%(duration_string)s] (%(uploader)s)" \
-			--no-warnings 2>/dev/null)
+		json_results=$(do_yts_search "$QUERY" 35 2>/dev/null)
 	else
-		# if [[ ! -f "$BILI_COOKIE" ]]; then
-		# 	STATUS="Bilibili cookie file missing: $BILI_COOKIE"
-		# 	draw_ui
-		# 	return
-		# fi
+		local raw_results
 		search_prefix="bilisearch15:$QUERY"
 		raw_results=$(yt-dlp --cookies "$BILI_COOKIE" "$search_prefix" \
 			--print "%(id)s|~|%(title)s [%(duration_string)s] (%(uploader)s)" \
@@ -336,16 +361,27 @@ do_search() {
 	RESULTS_ID=()
 	RESULTS_TITLE=()
 
-	while IFS= read -r line; do
-		[[ -z "$line" || "$line" == ERROR:* ]] && continue
-		local vid="${line%%|~|*}"
-		local title="${line#*|~|}"
-
-		if [[ -n "$vid" && -n "$title" ]]; then
-			RESULTS_ID+=("$vid")
-			RESULTS_TITLE+=("$title")
-		fi
-	done <<<"$raw_results"
+	if [[ "$SEARCH_SOURCE" == "youtube" ]]; then
+		while IFS= read -r line; do
+			local vid title
+			vid=$(echo "$line" | jq -r '.videoId' 2>/dev/null)
+			title=$(echo "$line" | jq -r '.title' 2>/dev/null)
+			if [[ "$vid" != "null" && -n "$vid" && "$title" != "null" && -n "$title" ]]; then
+				RESULTS_ID+=("$vid")
+				RESULTS_TITLE+=("$title")
+			fi
+		done < <(echo "$json_results" | jq -c '.[]' 2>/dev/null)
+	else
+		while IFS= read -r line; do
+			[[ -z "$line" || "$line" == ERROR:* ]] && continue
+			local vid="${line%%|~|*}"
+			local title="${line#*|~|}"
+			if [[ -n "$vid" && -n "$title" ]]; then
+				RESULTS_ID+=("$vid")
+				RESULTS_TITLE+=("$title")
+			fi
+		done <<<"$raw_results"
+	fi
 
 	SELECTED=0
 	if [[ ${#RESULTS_ID[@]} -eq 0 ]]; then
