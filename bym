@@ -222,7 +222,7 @@ draw_ui() {
 	echo -e "${curr_color}${line}\e[0m\e[K"
 
 	# ----------------------------------- 帮助信息 ----------------------------------- #
-	content="[enter]Play | [p]Pause | [r]Reload [s]Switch(${SEARCH_SOURCE}) |  [/]Search | [q]Quit"
+	content="[enter]Play | [space]Pause | [r]Reload [s]Switch(${SEARCH_SOURCE}) |  [/]Search | [q]Quit"
 	content_len=$(echo -n "$content" | wc -L)
 	padding=$((term_cols - content_len - 1))
 	printf "\r%${padding}s\e[90m%s\e[0m\e[K" "" "$content"
@@ -409,7 +409,7 @@ do_play() {
 	local title="${RESULTS_TITLE[$SELECTED]}"
 
 	if [[ -f "$id" && -r "$id" ]]; then
-		echo '{ "command": ["loadfile", "'"$id"'", "replace"] }' | socat - "$MPV_SOCKET" 2>/dev/null
+		echo '{ "command": ["loadfile", "'"$id"'", "replace"] }' | socat - "$MPV_SOCKET" >/dev/null 2>&1
 		STATUS="  Playing: $title (local)"
 	else
 		local video_url
@@ -418,7 +418,7 @@ do_play() {
 		else
 			video_url="https://www.bilibili.com/video/$id"
 		fi
-		echo '{ "command": ["loadfile", "'"$video_url"'", "replace"] }' | socat - "$MPV_SOCKET" 2>/dev/null
+		echo '{ "command": ["loadfile", "'"$video_url"'", "replace"] }' | socat - "$MPV_SOCKET" >/dev/null 2>&1
 		STATUS="  Playing: $title"
 	fi
 
@@ -450,10 +450,10 @@ while true; do
 	fi
 	draw_ui
 
-	if read -rsn1 -t 1 key; then
+	if IFS= read -rsn1 -t 1 key; then
 		if [[ "$key" == $'\e' ]]; then
-			if read -rsn1 -t 0 2>/dev/null; then
-				read -rsn1 k1
+				if IFS= read -rsn1 -t 0 2>/dev/null; then
+						IFS= read -rsn1 k1
 				if [[ "$k1" == "[" ]]; then
 					read -rsn1 k2
 					case "$k2" in
@@ -507,10 +507,10 @@ while true; do
 				load_local_music
 				draw_ui
 				;;
-			"p")
+			" ")
 				if [[ -n "$MPV_PID" ]]; then
 					# 通过 socket 发送暂停/继续命令
-					echo '{ "command": ["cycle", "pause"] }' | socat - "$MPV_SOCKET" 2>/dev/null
+					echo '{ "command": ["cycle", "pause"] }' | socat - "$MPV_SOCKET" >/dev/null 2>&1
 					if [[ "$STATUS" == *"Playing"* ]]; then
 						STATUS="${STATUS/  Playing/ Paused}"
 					else
